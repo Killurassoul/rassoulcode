@@ -1,15 +1,30 @@
 {
-  "name": "react-example",
+  "name": "codeforge-ai",
+  "productName": "CodeForge AI",
+  "version": "2.0.0",
+  "description": "Autonomous AI Software Engineer - Desktop Application",
+  "author": "Killurassoul",
+  "license": "MIT",
   "private": true,
-  "version": "0.0.0",
+  "main": "dist-electron/main.js",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
+    "dev:electron": "concurrently \"vite\" \"tsc -p electron/tsconfig.json && electron .\"",
     "build": "vite build",
+    "build:electron": "tsc -p electron/tsconfig.json",
     "preview": "vite preview",
-    "clean": "rm -rf dist",
+    "clean": "rm -rf dist dist-electron",
     "lint": "tsc --noEmit",
-    "start": "node dist/server.cjs"
+    "start": "node dist/server.cjs",
+    "electron:dev": "concurrently -k \"vite --port 5173\" \"sleep 3 && tsc -p electron/tsconfig.json && electron .\"",
+    "electron:build": "npm run build && npm run build:electron",
+    "electron:pack": "npm run electron:build && electron-builder --dir",
+    "electron:dist": "npm run electron:build && electron-builder",
+    "electron:dist:win": "npm run electron:build && electron-builder --win",
+    "electron:dist:mac": "npm run electron:build && electron-builder --mac",
+    "electron:dist:linux": "npm run electron:build && electron-builder --linux",
+    "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
@@ -35,11 +50,82 @@
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
+    "@types/fs-extra": "^11.0.4",
     "@types/node": "^22.14.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
     "autoprefixer": "^10.4.21",
+    "concurrently": "^9.1.2",
+    "electron": "^33.3.1",
+    "electron-builder": "^25.1.8",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.3"
+  },
+  "build": {
+    "appId": "com.codeforge.ai",
+    "productName": "CodeForge AI",
+    "copyright": "Copyright 2024 CodeForge AI",
+    "directories": {
+      "output": "release",
+      "buildResources": "assets"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "assets/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "assets/icon.png",
+      "artifactName": "CodeForge-AI-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "installerIcon": "assets/icon.png",
+      "uninstallerIcon": "assets/icon.png",
+      "installerSidebar": null,
+      "license": null
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        }
+      ],
+      "icon": "assets/icon.png",
+      "category": "public.app-category.developer-tools",
+      "artifactName": "CodeForge-AI-${version}-${arch}.${ext}"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": ["x64"]
+        },
+        {
+          "target": "deb",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "assets/icon.png",
+      "category": "Development",
+      "artifactName": "CodeForge-AI-${version}.${ext}"
+    },
+    "dmg": {
+      "title": "CodeForge AI ${version}",
+      "backgroundColor": "#0A0A0C"
+    },
+    "publish": null
   }
 }

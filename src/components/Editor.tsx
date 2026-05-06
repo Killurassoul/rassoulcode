@@ -1,23 +1,26 @@
 import Editor, { OnMount } from "@monaco-editor/react";
-import { useIDEStore } from "../store/useIDEStore.ts";
+import { useIDEStore } from "../store/useIDEStore";
 import { Sparkles, Save, Wand2, Loader2, Code2 } from "lucide-react";
-import { cn } from "../lib/utils.ts";
+import { cn } from "../lib/utils";
 import { useRef, useState, useEffect } from "react";
-import { getAutocomplete } from "../lib/gemini.ts";
+import { getAIAutocomplete } from "../lib/ai-providers";
 
 export default function CodeEditor() {
-  const { 
-    activeFile, 
-    fileContents, 
+  const {
+    activeFile,
+    fileContents,
     setFileContent,
     refactorCode,
     isAgentThinking,
     fileTree,
     fileSaveStatus,
-    setFileSaveStatus
+    setFileSaveStatus,
+    saveFile,
+    aiProvider,
+    aiModel,
+    apiKeys,
   } = useIDEStore();
 
-  // Helper to stringify file tree for tokens
   const getFileTreeContext = (nodes: any[], indent = ""): string => {
     return nodes.map(node => {
       if (node.type === "directory") {
@@ -27,7 +30,7 @@ export default function CodeEditor() {
     }).join("\n");
   };
 
-  const projectContext = getFileTreeContext(fileTree).substring(0, 1000); // Limit context size
+  const projectContext = getFileTreeContext(fileTree).substring(0, 1000);
 
   const editorRef = useRef<any>(null);
   const monacoRef = useRef<any>(null);
@@ -38,44 +41,38 @@ export default function CodeEditor() {
     if (!monacoRef.current) return;
 
     const monaco = monacoRef.current;
-    
-    // Inline completions are the "Ghost Text" style (like Copilot)
+    const apiKey = apiKeys[aiProvider] || "";
+
+    if (!apiKey) return;
+
     let lastRequestTime = 0;
     const provider = monaco.languages.registerInlineCompletionsProvider(
-      ["typescript", "javascript", "css", "html", "json", "markdown", "plaintext"],
+      ["typescript", "javascript", "css", "html", "json", "markdown", "plaintext", "python", "rust", "go"],
       {
         provideInlineCompletions: async (model: any, position: any) => {
           const now = Date.now();
           lastRequestTime = now;
-          
-          // Debounce: wait 400ms after last stroke
+
           await new Promise(resolve => setTimeout(resolve, 400));
           if (lastRequestTime !== now) return { items: [] };
-
-          // Only trigger if we have an active file and enough content
           if (!activeFile) return;
 
           const textUntilPosition = model.getValueInRange({
-            startLineNumber: 1,
-            startColumn: 1,
-            endLineNumber: position.lineNumber,
-            endColumn: position.column,
+            startLineNumber: 1, startColumn: 1,
+            endLineNumber: position.lineNumber, endColumn: position.column,
           });
-
           const textAfterPosition = model.getValueInRange({
-            startLineNumber: position.lineNumber,
-            startColumn: position.column,
-            endLineNumber: model.getLineCount(),
-            endColumn: model.getLineMaxColumn(model.getLineCount()),
+            startLineNumber: position.lineNumber, startColumn: position.column,
+            endLineNumber: model.getLineCount(), endColumn: model.getLineMaxColumn(model.getLineCount()),
           });
 
-          // Debounce / Minimal context check
           if (textUntilPosition.length < 5) return;
 
           try {
-            const suggestion = await getAutocomplete(
-              textUntilPosition.slice(-2000), // Last 2000 chars
-              textAfterPosition.slice(0, 500),  // Next 500 chars
+            const suggestion = await getAIAutocomplete(
+              aiProvider, aiModel, apiKey,
+              textUntilPosition.slice(-2000),
+              textAfterPosition.slice(0, 500),
               activeFile,
               projectContext
             );
@@ -83,17 +80,13 @@ export default function CodeEditor() {
             if (!suggestion) return { items: [] };
 
             return {
-              items: [
-                {
-                  insertText: suggestion,
-                  range: {
-                    startLineNumber: position.lineNumber,
-                    startColumn: position.column,
-                    endLineNumber: position.lineNumber,
-                    endColumn: position.column,
-                  },
+              items: [{
+                insertText: suggestion,
+                range: {
+                  startLineNumber: position.lineNumber, startColumn: position.column,
+                  endLineNumber: position.lineNumber, endColumn: position.column,
                 },
-              ],
+              }],
             };
           } catch (e) {
             console.error("AI Completion provider error:", e);
@@ -105,13 +98,12 @@ export default function CodeEditor() {
     );
 
     return () => provider.dispose();
-  }, [activeFile]);
+  }, [activeFile, aiProvider, aiModel, apiKeys]);
 
   const handleEditorDidMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
-    
-    // Customize Theme
+
     monaco.editor.defineTheme("codeforge-dark", {
       base: "vs-dark",
       inherit: true,
@@ -125,40 +117,47 @@ export default function CodeEditor() {
       },
     });
     monaco.editor.setTheme("codeforge-dark");
+
+    // Add save keybinding
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+      const file = useIDEStore.getState().activeFile;
+      if (file) {
+        const content = editor.getValue();
+        useIDEStore.getState().setFileContent(file, content);
+        useIDEStore.getState().saveFile(file);
+      }
+    });
   };
 
   const handleSave = async () => {
     if (!activeFile || isSaving) return;
     const content = editorRef.current?.getValue();
-    setFileSaveStatus(activeFile, "saving");
-    try {
-      const res = await fetch("/api/file", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: activeFile, content })
-      });
-      if (res.ok) {
-        setFileSaveStatus(activeFile, "saved");
-      } else {
-        setFileSaveStatus(activeFile, "unsaved");
-      }
-    } catch (error) {
-      console.error("Failed to save", error);
-      setFileSaveStatus(activeFile, "unsaved");
+    if (content !== undefined) {
+      setFileContent(activeFile, content);
+      await saveFile(activeFile);
     }
   };
 
   const getLanguage = (path: string) => {
     const ext = path.split(".").pop();
     switch (ext) {
-      case "ts":
-      case "tsx": return "typescript";
-      case "js":
-      case "jsx": return "javascript";
+      case "ts": case "tsx": return "typescript";
+      case "js": case "jsx": return "javascript";
       case "css": return "css";
       case "json": return "json";
       case "html": return "html";
       case "md": return "markdown";
+      case "py": return "python";
+      case "rs": return "rust";
+      case "go": return "go";
+      case "java": return "java";
+      case "c": case "cpp": case "h": return "cpp";
+      case "sh": case "bash": return "shell";
+      case "yaml": case "yml": return "yaml";
+      case "toml": return "toml";
+      case "sql": return "sql";
+      case "xml": return "xml";
+      case "svg": return "xml";
       default: return "plaintext";
     }
   };
@@ -170,17 +169,17 @@ export default function CodeEditor() {
           <Code2 size={48} className="text-white/10" />
         </div>
         <div className="flex flex-col items-center gap-1">
-          <h2 className="text-lg font-medium text-white/80">rassoul code</h2>
-          <p className="text-xs">Sélectionnez un fichier pour commencer à coder</p>
+          <h2 className="text-lg font-medium text-white/80">CodeForge AI</h2>
+          <p className="text-xs">Select a file to start coding</p>
         </div>
         <div className="flex gap-8 mt-12 text-[11px] font-mono uppercase tracking-widest">
           <div className="flex flex-col items-center gap-2 group/key">
-            <span className="p-1 px-2 border border-white/10 rounded group-hover/key:border-brand transition-colors select-none">⌘ K</span>
-            <span>Ouvrir Fichier</span>
+            <span className="p-1 px-2 border border-white/10 rounded group-hover/key:border-brand transition-colors select-none">Ctrl+K</span>
+            <span>Open File</span>
           </div>
           <div className="flex flex-col items-center gap-2 group/key">
-            <span className="p-1 px-2 border border-white/10 rounded group-hover/key:border-brand transition-colors select-none">⌘ L</span>
-            <span>Demander à l'IA</span>
+            <span className="p-1 px-2 border border-white/10 rounded group-hover/key:border-brand transition-colors select-none">Ctrl+L</span>
+            <span>Ask AI</span>
           </div>
         </div>
       </div>
@@ -192,19 +191,21 @@ export default function CodeEditor() {
       <div className="flex-1 relative">
         {/* Floating AI Actions */}
         <div className="absolute top-4 right-8 z-20 flex items-center gap-2 pointer-events-none group-hover:pointer-events-auto opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0">
-          <button 
+          <button
             onClick={refactorCode}
             disabled={isAgentThinking}
             className="flex items-center gap-2 px-3 py-1.5 bg-bg-panel/80 backdrop-blur border border-brand/30 text-brand text-[11px] font-bold rounded-lg hover:bg-brand hover:text-white transition-all shadow-xl shadow-brand/10 disabled:opacity-50"
           >
             {isAgentThinking ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />}
-            <span>Optimiser</span>
+            AI Refactor
           </button>
-          <button 
-            className="flex items-center gap-2 px-3 py-1.5 bg-bg-panel/80 backdrop-blur border border-white/10 text-white text-[11px] font-bold rounded-lg hover:bg-white/10 transition-all shadow-xl"
+          <button
+            onClick={handleSave}
+            disabled={isSaving}
+            className="flex items-center gap-2 px-3 py-1.5 bg-bg-panel/80 backdrop-blur border border-white/10 text-white text-[11px] font-medium rounded-lg hover:bg-white/10 transition-all shadow-xl disabled:opacity-50"
           >
-            <Sparkles size={12} className="text-yellow-400" />
-            <span>Expliquer</span>
+            {isSaving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+            Save
           </button>
         </div>
 
@@ -212,33 +213,25 @@ export default function CodeEditor() {
           height="100%"
           language={getLanguage(activeFile)}
           value={fileContents[activeFile]}
+          onChange={(value) => value !== undefined && setFileContent(activeFile, value)}
           onMount={handleEditorDidMount}
-          onChange={(val) => setFileContent(activeFile, val || "")}
           options={{
             fontSize: 13,
-            lineNumbers: "on",
-            minimap: { enabled: true, scale: 0.75, renderCharacters: false },
-            padding: { top: 16 },
-            scrollBeyondLastLine: false,
+            fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+            fontLigatures: true,
+            lineHeight: 22,
+            minimap: { enabled: true, scale: 1 },
+            scrollbar: { verticalScrollbarSize: 6, horizontalScrollbarSize: 6 },
             smoothScrolling: true,
-            cursorBlinking: "expand",
+            cursorBlinking: "smooth",
             cursorSmoothCaretAnimation: "on",
-            automaticLayout: true,
-            fontFamily: "JetBrains Mono",
+            padding: { top: 16 },
+            renderLineHighlight: "all",
             bracketPairColorization: { enabled: true },
-            inlineSuggest: { enabled: true, showToolbar: "always" },
-            suggest: { showWords: false }, // Reduce noise to favor AI
+            automaticLayout: true,
+            wordWrap: "on",
           }}
         />
-
-        <button 
-          onClick={handleSave}
-          disabled={isSaving}
-          className="absolute bottom-6 right-6 p-4 bg-brand hover:bg-brand-hover text-white rounded-2xl shadow-2xl shadow-brand/40 transition-all hover:scale-105 active:scale-95 flex items-center gap-2 text-sm z-10 group/btn font-bold"
-        >
-          {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} className="group-hover/btn:rotate-12 transition-transform" />}
-          <span className="tracking-tight">Enregistrer</span>
-        </button>
       </div>
     </div>
   );

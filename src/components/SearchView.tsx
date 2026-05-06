@@ -1,7 +1,6 @@
 import React, { useState } from "react";
-import { useIDEStore } from "../store/useIDEStore.ts";
-import { Search, FileText, Loader2, ChevronRight } from "lucide-react";
-import { cn } from "../lib/utils.ts";
+import { useIDEStore } from "../store/useIDEStore";
+import { Search, FileText, Loader2 } from "lucide-react";
 
 export default function SearchView() {
   const { searchQuery, setSearchQuery, performSearch, searchResults, openFile } = useIDEStore();
@@ -23,33 +22,31 @@ export default function SearchView() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Rechercher dans le projet..."
+            placeholder="Search in project..."
             className="w-full bg-[#0A0A0B] border border-white/10 rounded-lg py-2 pl-9 pr-3 text-sm focus:border-brand outline-none transition-all"
             autoFocus
           />
           <Search className="absolute left-3 top-2.5 text-text-dim" size={14} />
-          {isSearching && (
-            <Loader2 className="absolute right-3 top-2.5 text-brand animate-spin" size={14} />
-          )}
+          {isSearching && <Loader2 className="absolute right-3 top-2.5 text-brand animate-spin" size={14} />}
         </form>
       </div>
 
       <div className="flex-1 overflow-y-auto">
         {!searchResults.length && searchQuery && !isSearching && (
           <div className="p-8 text-center text-text-dim text-xs italic">
-            Aucun résultat trouvé pour "{searchQuery}"
+            No results found for "{searchQuery}"
           </div>
         )}
 
         {!searchQuery && !isSearching && (
           <div className="p-8 text-center text-text-dim text-xs opacity-50">
-            Commencez à taper pour rechercher...
+            Start typing to search...
           </div>
         )}
-        
+
         <div className="py-2">
-          {searchResults.map((result, i) => (
-            <div 
+          {searchResults.map((result: any, i: number) => (
+            <div
               key={`${result.path}-${result.line}-${i}`}
               onClick={() => openFile(result.path)}
               className="px-4 py-2 hover:bg-white/5 cursor-pointer border-b border-white/2 group transition-colors"
@@ -59,7 +56,7 @@ export default function SearchView() {
                 <span className="text-[11px] font-mono text-white/80 group-hover:text-white transition-colors truncate">
                   {result.path}
                 </span>
-                <span className="text-[10px] text-text-dim ml-auto">ligne {result.line}</span>
+                <span className="text-[10px] text-text-dim ml-auto">line {result.line}</span>
               </div>
               <div className="pl-4 border-l-2 border-brand/20 group-hover:border-brand/50 transition-colors">
                 <p className="text-[10px] text-text-dim font-mono truncate bg-bg-panel/50 px-1 py-0.5 rounded italic">
