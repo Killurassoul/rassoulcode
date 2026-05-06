@@ -128,37 +128,106 @@ export default function AIChat() {
     setConfirmAction(null);
   };
 
-  const handleSend = async () => {
-    if (!input.trim() || isAgentThinking) return;
+  const [lastError, setLastError] = useState<{ code: string; message: string } | null>(null);
 
+  const handleSend = async (customInput?: string) => {
+    const textToSend = customInput || input;
+    if (!textToSend.trim() || isAgentThinking) return;
+
+    setLastError(null);
     const userMsg: ChatMessage = {
       role: "user",
-      content: input,
+      content: textToSend,
       timestamp: new Date().toISOString(),
     };
 
     addMessage(userMsg);
-    setInput("");
+    if (!customInput) setInput("");
     setAgentThinking(true);
 
-    // Prepare context
-    let context = `Active File: ${activeFile || "None"}\n`;
-    if (activeFile && fileContents[activeFile]) {
-      context += `Content of ${activeFile}:\n\`\`\`\n${fileContents[activeFile]}\n\`\`\``;
+    try {
+      // Prepare context
+      let context = `Active File: ${activeFile || "None"}\n`;
+      if (activeFile && fileContents[activeFile]) {
+        context += `Content of ${activeFile}:\n\`\`\`\n${fileContents[activeFile]}\n\`\`\``;
+      }
+
+      const aiRawResponse = await askAI(textToSend, context);
+      const { cleanText, actions } = parseActions(aiRawResponse);
+
+      const assistantMsg: ChatMessage = {
+        role: "assistant",
+        content: cleanText,
+        timestamp: new Date().toISOString(),
+        actions: actions.length > 0 ? actions : undefined
+      };
+
+      addMessage(assistantMsg);
+    } catch (error: any) {
+      console.error("AI chat error handled:", error);
+      setLastError({
+        code: error.code || "UNKNOWN",
+        message: error.message || "Impossible de communiquer avec l'IA."
+      });
+    } finally {
+      setAgentThinking(false);
     }
+  };
 
-    const aiRawResponse = await askAI(input, context);
-    const { cleanText, actions } = parseActions(aiRawResponse);
+  const renderError = () => {
+    if (!lastError) return null;
 
-    const assistantMsg: ChatMessage = {
-      role: "assistant",
-      content: cleanText,
-      timestamp: new Date().toISOString(),
-      actions: actions.length > 0 ? actions : undefined
-    };
+    const suggestions = {
+      "QUOTA_EXCEEDED": [
+        { label: "Utiliser un modèle plus léger", action: () => { useIDEStore.getState().setAiModel("gemini-1.5-flash"); handleSend(); } },
+        { label: "Réessayer dans 1 minute", action: () => handleSend() }
+      ],
+      "INVALID_API_KEY": [
+        { label: "Vérifier la configuration API", action: () => useIDEStore.getState().setActiveSidebarTab("settings") }
+      ],
+      "SAFETY_BLOCK": [
+        { label: "Reformuler la demande", action: () => setInput("Peux-tu m'aider à écrire cela de manière plus standard ?") }
+      ],
+      "NETWORK_ERROR": [
+        { label: "Vérifier la connexion", action: () => handleSend() }
+      ]
+    }[lastError.code as keyof typeof suggestions] || [
+      { label: "Réessayer", action: () => handleSend() }
+    ];
 
-    addMessage(assistantMsg);
-    setAgentThinking(false);
+    return (
+      <div className="mx-4 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <div className="flex items-start gap-3 mb-3">
+          <div className="p-2 bg-red-500/20 rounded-lg text-red-500">
+            <AlertCircle size={16} />
+          </div>
+          <div>
+            <h3 className="text-xs font-bold text-red-400 uppercase tracking-wider mb-1">Erreur de l'IA ({lastError.code})</h3>
+            <p className="text-xs text-red-200/70 leading-relaxed font-medium">
+              {lastError.message}
+            </p>
+          </div>
+        </div>
+        
+        <div className="flex flex-wrap gap-2">
+          {suggestions.map((s, i) => (
+            <button 
+              key={i} 
+              onClick={() => { setLastError(null); s.action(); }}
+              className="text-[10px] bg-red-500/20 hover:bg-red-500/30 text-red-200 px-3 py-1.5 rounded-lg border border-red-500/20 transition-all font-bold uppercase tracking-tight"
+            >
+              {s.label}
+            </button>
+          ))}
+          <button 
+            onClick={() => setLastError(null)}
+            className="text-[10px] bg-white/5 hover:bg-white/10 text-zinc-400 px-3 py-1.5 rounded-lg transition-all font-bold uppercase tracking-tight"
+          >
+            Ignorer
+          </button>
+        </div>
+      </div>
+    );
   };
 
   // Auto-execute in Autonomous mode
@@ -366,6 +435,8 @@ export default function AIChat() {
           </div>
         )}
       </div>
+
+      {renderError()}
 
       {/* Input */}
       <div className="p-4 border-t border-border">

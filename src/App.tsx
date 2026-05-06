@@ -17,6 +17,9 @@ import Editor from "./components/Editor.tsx";
 import AIChat from "./components/AIChat.tsx";
 import Terminal from "./components/Terminal.tsx";
 import StatusBar from "./components/StatusBar.tsx";
+import TabSystem from "./components/TabSystem.tsx";
+import Breadcrumbs from "./components/Breadcrumbs.tsx";
+import CommandPalette from "./components/CommandPalette.tsx";
 import { useIDEStore } from "./store/useIDEStore.ts";
 import { motion, AnimatePresence } from "motion/react";
 import { PanelLeftClose, PanelLeft, PanelRightClose, PanelRight } from "lucide-react";
@@ -42,6 +45,7 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-bg-dark text-[#E0E0E0] font-sans selection:bg-brand/30">
       {/* Editorial Title Bar */}
+      <CommandPalette />
       <div className="h-10 bg-bg-panel border-b border-white/5 flex items-center px-4 justify-between select-none">
         <div className="flex items-center gap-2">
           <div className="flex gap-1.5 mr-4">
@@ -113,6 +117,8 @@ export default function App() {
 
         {/* Editor Area & Terminal */}
         <div className="flex flex-col flex-1 min-w-0 bg-bg-dark relative shadow-inner editor-gradient">
+          <TabSystem />
+          <Breadcrumbs />
           <div className="flex-1 min-h-0">
             <Editor />
           </div>

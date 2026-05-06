@@ -79,6 +79,7 @@ interface IDEState {
   pushChanges: () => Promise<void>;
   pullChanges: () => Promise<void>;
   generateCommitMessage: () => Promise<string>;
+  refactorCode: () => Promise<void>;
   
   // File operations
   deleteFile: (path: string) => Promise<void>;
@@ -285,6 +286,35 @@ export const useIDEStore = create<IDEState>((set, get) => ({
     } catch (e) {
       console.error("AI Commit Message failed", e);
       return `Update ${stagedChanges.length} files`;
+    }
+  },
+
+  refactorCode: async () => {
+    const { activeFile, fileContents, setFileContent } = get();
+    if (!activeFile) return;
+
+    try {
+      set({ isAgentThinking: true });
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const content = fileContents[activeFile];
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3.1-pro-preview",
+        contents: `Refactor and improve the following code. Keep it clean, efficient and follow best practices. 
+        Output ONLY the improved code, no explanations or markdown blocks.
+        
+        CODE:
+        ${content}`,
+      });
+
+      const improvedCode = response.text?.trim().replace(/^```[a-z]*\n/i, "").replace(/\n```$/i, "");
+      if (improvedCode) {
+        setFileContent(activeFile, improvedCode);
+      }
+    } catch (e) {
+      console.error("Refactoring failed", e);
+    } finally {
+      set({ isAgentThinking: false });
     }
   },
 

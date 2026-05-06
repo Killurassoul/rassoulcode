@@ -35,7 +35,7 @@ export default function StatusBar() {
         <span className="opacity-80">TypeScript React</span>
         <div className="flex items-center gap-1.5 opacity-80 hover:opacity-100 hover:bg-white/10 px-1.5 h-full cursor-pointer transition-all">
           <ShieldCheck size={11} />
-          <span className="uppercase tracking-tighter">Mode Autonome Actif</span>
+          <span className="uppercase tracking-tighter">Mode {executionMode === "safe" ? "Sécurisé" : "Autonome"} Actif</span>
         </div>
         <div className="flex items-center gap-1.5 hover:bg-white/10 px-1.5 h-full cursor-pointer transition-all">
           <Sparkles size={11} className="text-white animate-pulse" />

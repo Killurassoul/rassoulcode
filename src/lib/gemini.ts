@@ -43,9 +43,23 @@ export async function askAI(prompt: string, context: string = "") {
       }
     });
 
-    return response.text || "I'm sorry, I couldn't generate a response.";
-  } catch (error) {
+    if (!response.text) {
+      throw new Error("EMPTY_RESPONSE");
+    }
+
+    return response.text;
+  } catch (error: any) {
     console.error("Gemini AI error:", error);
-    return "Error communicating with AI. Please check your API key.";
+    
+    // Better error propagation
+    let errorCode = "UNKNOWN_ERROR";
+    let errorMessage = error.message || "An unexpected error occurred.";
+    
+    if (errorMessage.includes("API key")) errorCode = "INVALID_API_KEY";
+    if (errorMessage.includes("quota") || errorMessage.includes("429")) errorCode = "QUOTA_EXCEEDED";
+    if (errorMessage.includes("network") || errorMessage.includes("fetch")) errorCode = "NETWORK_ERROR";
+    if (errorMessage.includes("safety") || errorMessage.includes("blocked")) errorCode = "SAFETY_BLOCK";
+
+    throw { code: errorCode, message: errorMessage, originalError: error };
   }
 }

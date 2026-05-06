@@ -56,16 +56,18 @@ export default function Terminal() {
     
     // Delay initial fit to ensure container is ready
     const timeoutId = setTimeout(() => {
-      if (!term || !terminalRef.current || !term.element || !term.element.isConnected) return;
+      if (!term || (term as any)._disposed || !terminalRef.current || !term.element || !term.element.isConnected) return;
+      
       try {
         const core = (term as any)._core;
-        if (core?._renderService?.dimensions) {
+        // Strict check for internal renderer state before calling fit()
+        if (core?._renderService?.dimensions?.actualCellWidth > 0 && core?._renderService?.dimensions?.actualCellHeight > 0) {
           fitAddon.fit();
         }
       } catch (e) {
-        // Silently fail
+        // Silently fail during initial setup
       }
-    }, 200);
+    }, 500);
 
     xtermRef.current = term;
 
@@ -116,21 +118,19 @@ export default function Terminal() {
     });
 
     const handleResize = () => {
-      // Use the term closure variable but double check it's still the active ref one
-      if (!term || !terminalRef.current || !term.element || !term.element.isConnected) return;
+      if (!term || (term as any)._disposed || !terminalRef.current || !term.element || !term.element.isConnected) return;
       
-      const { offsetWidth, offsetHeight } = terminalRef.current;
-      if (offsetWidth <= 0 || offsetHeight <= 0) return;
+      // Avoid fitting if hidden or not visible (offsetParent is null when display: none)
+      if (!terminalRef.current.offsetParent) return;
 
       try {
-        // xterm-addon-fit 0.8.0 sometimes accesses internal dimensions too early
-        // We check if the terminal has a renderer and dimensions before fitting
         const core = (term as any)._core;
-        if (core?._renderService?.dimensions) {
+        // Ensure the internal render service and dimensions are fully initialized
+        if (core?._renderService?.dimensions?.actualCellWidth > 0 && core?._renderService?.dimensions?.actualCellHeight > 0) {
           fitAddon.fit();
         }
       } catch (e) {
-        console.warn("Terminal resize failed", e);
+        // Silently ignore resize errors as they are common during rapid UI changes (transitions, etc.)
       }
     };
 
