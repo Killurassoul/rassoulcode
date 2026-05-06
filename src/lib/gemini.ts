@@ -63,3 +63,43 @@ export async function askAI(prompt: string, context: string = "") {
     throw { code: errorCode, message: errorMessage, originalError: error };
   }
 }
+
+export async function getAutocomplete(prefix: string, suffix: string, filename: string, projectContext: string = "") {
+  const modelName = "gemini-1.5-flash"; // Fast and capable for autocomplete
+  
+  const prompt = `
+    You are an AI code completion engine.
+    Complete the code for the file "${filename}" in the following project:
+    
+    PROJECT STRUCTURE:
+    ${projectContext}
+    
+    FILE CONTEXT (PREFIX):
+    ${prefix}
+    
+    FILE CONTEXT (SUFFIX):
+    ${suffix}
+    
+    INSTRUCTIONS:
+    - Provide ONLY the code that should be inserted between the prefix and suffix.
+    - Do not repeat the prefix or suffix.
+    - Be concise and provide exactly what's needed to complete the current thought/statement.
+    - Output ONLY source code. No markdown formatting like \`\`\` or explanations.
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: modelName,
+      contents: prompt,
+      config: {
+        temperature: 0.0, // Absolute determinism
+        maxOutputTokens: 128, // Keep it short and fast
+      }
+    });
+
+    return response.text?.trim() || "";
+  } catch (error) {
+    console.error("Autocomplete error:", error);
+    return "";
+  }
+}

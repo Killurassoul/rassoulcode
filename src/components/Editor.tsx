@@ -2,7 +2,8 @@ import Editor, { OnMount } from "@monaco-editor/react";
 import { useIDEStore } from "../store/useIDEStore.ts";
 import { Sparkles, Save, Wand2, Loader2, Code2 } from "lucide-react";
 import { cn } from "../lib/utils.ts";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
+import { getAutocomplete } from "../lib/gemini.ts";
 
 export default function CodeEditor() {
   const { 
@@ -10,13 +11,105 @@ export default function CodeEditor() {
     fileContents, 
     setFileContent,
     refactorCode,
-    isAgentThinking
+    isAgentThinking,
+    fileTree,
+    fileSaveStatus,
+    setFileSaveStatus
   } = useIDEStore();
+
+  // Helper to stringify file tree for tokens
+  const getFileTreeContext = (nodes: any[], indent = ""): string => {
+    return nodes.map(node => {
+      if (node.type === "directory") {
+        return `${indent}DIR: ${node.name}\n${getFileTreeContext(node.children || [], indent + "  ")}`;
+      }
+      return `${indent}FILE: ${node.name}`;
+    }).join("\n");
+  };
+
+  const projectContext = getFileTreeContext(fileTree).substring(0, 1000); // Limit context size
+
   const editorRef = useRef<any>(null);
-  const [isSaving, setIsSaving] = useState(false);
+  const monacoRef = useRef<any>(null);
+  const isSaving = activeFile ? fileSaveStatus[activeFile] === "saving" : false;
+
+  // Register AI Autocomplete
+  useEffect(() => {
+    if (!monacoRef.current) return;
+
+    const monaco = monacoRef.current;
+    
+    // Inline completions are the "Ghost Text" style (like Copilot)
+    let lastRequestTime = 0;
+    const provider = monaco.languages.registerInlineCompletionsProvider(
+      ["typescript", "javascript", "css", "html", "json", "markdown", "plaintext"],
+      {
+        provideInlineCompletions: async (model: any, position: any) => {
+          const now = Date.now();
+          lastRequestTime = now;
+          
+          // Debounce: wait 400ms after last stroke
+          await new Promise(resolve => setTimeout(resolve, 400));
+          if (lastRequestTime !== now) return { items: [] };
+
+          // Only trigger if we have an active file and enough content
+          if (!activeFile) return;
+
+          const textUntilPosition = model.getValueInRange({
+            startLineNumber: 1,
+            startColumn: 1,
+            endLineNumber: position.lineNumber,
+            endColumn: position.column,
+          });
+
+          const textAfterPosition = model.getValueInRange({
+            startLineNumber: position.lineNumber,
+            startColumn: position.column,
+            endLineNumber: model.getLineCount(),
+            endColumn: model.getLineMaxColumn(model.getLineCount()),
+          });
+
+          // Debounce / Minimal context check
+          if (textUntilPosition.length < 5) return;
+
+          try {
+            const suggestion = await getAutocomplete(
+              textUntilPosition.slice(-2000), // Last 2000 chars
+              textAfterPosition.slice(0, 500),  // Next 500 chars
+              activeFile,
+              projectContext
+            );
+
+            if (!suggestion) return { items: [] };
+
+            return {
+              items: [
+                {
+                  insertText: suggestion,
+                  range: {
+                    startLineNumber: position.lineNumber,
+                    startColumn: position.column,
+                    endLineNumber: position.lineNumber,
+                    endColumn: position.column,
+                  },
+                },
+              ],
+            };
+          } catch (e) {
+            console.error("AI Completion provider error:", e);
+            return { items: [] };
+          }
+        },
+        freeInlineCompletions: () => {},
+      }
+    );
+
+    return () => provider.dispose();
+  }, [activeFile]);
 
   const handleEditorDidMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
+    monacoRef.current = monaco;
     
     // Customize Theme
     monaco.editor.defineTheme("codeforge-dark", {
@@ -35,8 +128,9 @@ export default function CodeEditor() {
   };
 
   const handleSave = async () => {
-    if (!activeFile) return;
+    if (!activeFile || isSaving) return;
     const content = editorRef.current?.getValue();
+    setFileSaveStatus(activeFile, "saving");
     try {
       const res = await fetch("/api/file", {
         method: "POST",
@@ -44,10 +138,13 @@ export default function CodeEditor() {
         body: JSON.stringify({ path: activeFile, content })
       });
       if (res.ok) {
-        console.log("File saved!");
+        setFileSaveStatus(activeFile, "saved");
+      } else {
+        setFileSaveStatus(activeFile, "unsaved");
       }
     } catch (error) {
       console.error("Failed to save", error);
+      setFileSaveStatus(activeFile, "unsaved");
     }
   };
 
@@ -129,6 +226,8 @@ export default function CodeEditor() {
             automaticLayout: true,
             fontFamily: "JetBrains Mono",
             bracketPairColorization: { enabled: true },
+            inlineSuggest: { enabled: true, showToolbar: "always" },
+            suggest: { showWords: false }, // Reduce noise to favor AI
           }}
         />
 

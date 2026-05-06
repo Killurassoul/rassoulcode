@@ -42,6 +42,8 @@ interface IDEState {
   setActiveFile: (path: string) => void;
   fileContents: Record<string, string>;
   setFileContent: (path: string, content: string) => void;
+  fileSaveStatus: Record<string, "saved" | "unsaved" | "saving">;
+  setFileSaveStatus: (path: string, status: "saved" | "unsaved" | "saving") => void;
   
   // AI Chat
   chatHistory: ChatMessage[];
@@ -106,6 +108,7 @@ export const useIDEStore = create<IDEState>((set, get) => ({
   openFiles: [],
   activeFile: null,
   fileContents: {},
+  fileSaveStatus: {},
   
   openFile: async (filePath) => {
     const { openFiles, fileContents } = get();
@@ -120,6 +123,7 @@ export const useIDEStore = create<IDEState>((set, get) => ({
         const data = await res.json();
         set({
           fileContents: { ...get().fileContents, [filePath]: data.content },
+          fileSaveStatus: { ...get().fileSaveStatus, [filePath]: "saved" },
           activeFile: filePath
         });
       } catch (error) {
@@ -141,8 +145,15 @@ export const useIDEStore = create<IDEState>((set, get) => ({
   },
   
   setActiveFile: (filePath) => set({ activeFile: filePath }),
-  setFileContent: (path, content) => set({
-    fileContents: { ...get().fileContents, [path]: content }
+  setFileContent: (path, content) => {
+    const { fileSaveStatus } = get();
+    set({
+      fileContents: { ...get().fileContents, [path]: content },
+      fileSaveStatus: { ...fileSaveStatus, [path]: "unsaved" }
+    });
+  },
+  setFileSaveStatus: (path, status) => set({
+    fileSaveStatus: { ...get().fileSaveStatus, [path]: status }
   }),
   
   chatHistory: [
