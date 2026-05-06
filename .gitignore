@@ -1,8 +1,33 @@
+# Dependencies
 node_modules/
-build/
+
+# Build outputs
 dist/
-coverage/
+dist-electron/
+release/
+
+# IDE
+.idea/
+*.swp
+*.swo
+.vscode/
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
 *.log
-.env*
-!.env.example
+npm-debug.log*
+
+# Electron
+*.exe
+*.dmg
+*.AppImage
+*.deb
+*.snap

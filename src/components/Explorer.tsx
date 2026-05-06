@@ -1,17 +1,16 @@
-import { ChevronRight, ChevronDown, File, Folder, FolderOpen, MoreVertical, Plus, RotateCw, Trash2, FilePlus, FolderPlus } from "lucide-react";
+import { ChevronRight, ChevronDown, File, Folder, FolderOpen, Trash2, FilePlus, FolderPlus, RotateCw } from "lucide-react";
 import React, { useState } from "react";
-import { useIDEStore, FileNode } from "../store/useIDEStore.ts";
-import { cn } from "../lib/utils.ts";
+import { useIDEStore, FileNode } from "../store/useIDEStore";
+import { cn } from "../lib/utils";
 
 interface TreeItemProps {
   node: FileNode;
   level: number;
-  key?: string | number;
 }
 
 function TreeItem({ node, level }: TreeItemProps) {
   const [isOpen, setOpen] = useState(false);
-  const { openFile, activeFile, deleteFile } = useIDEStore();
+  const { openFile, activeFile, deleteFileAction } = useIDEStore();
 
   const isDirectory = node.type === "directory";
   const isSelected = activeFile === node.path;
@@ -30,8 +29,7 @@ function TreeItem({ node, level }: TreeItemProps) {
     e.dataTransfer.setData("text/plain", node.path);
     e.dataTransfer.setData("application/x-file-path", node.path);
     e.dataTransfer.effectAllowed = "copy";
-    
-    // Create a drag image
+
     const dragIcon = document.createElement("div");
     dragIcon.className = "bg-brand text-white px-3 py-1 rounded text-xs font-mono shadow-xl";
     dragIcon.innerText = node.name;
@@ -42,14 +40,14 @@ function TreeItem({ node, level }: TreeItemProps) {
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm(`Voulez-vous vraiment supprimer ${node.name} ?`)) {
-      deleteFile(node.path);
+    if (confirm(`Delete ${node.name}?`)) {
+      deleteFileAction(node.path);
     }
   };
 
   return (
     <div>
-      <div 
+      <div
         draggable={!isDirectory}
         onDragStart={handleDragStart}
         className={cn(
@@ -60,31 +58,19 @@ function TreeItem({ node, level }: TreeItemProps) {
         onClick={handleClick}
       >
         <span className="text-text-dim group-hover:text-white transition-colors w-4 flex justify-center">
-          {isDirectory ? (
-            isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />
-          ) : null}
-        </span>
-        
-        <span className={cn(
-          "flex-shrink-0",
-          isDirectory ? "text-indigo-400" : "text-amber-500/80"
-        )}>
-          {isDirectory ? (
-            isOpen ? <FolderOpen size={16} /> : <Folder size={16} />
-          ) : (
-            <File size={16} />
-          )}
+          {isDirectory ? (isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />) : null}
         </span>
 
-        <span className={cn(
-          "text-[13px] truncate flex-1",
-          isSelected ? "text-white" : "text-zinc-300"
-        )}>
+        <span className={cn("flex-shrink-0", isDirectory ? "text-indigo-400" : "text-amber-500/80")}>
+          {isDirectory ? (isOpen ? <FolderOpen size={16} /> : <Folder size={16} />) : <File size={16} />}
+        </span>
+
+        <span className={cn("text-[13px] truncate flex-1", isSelected ? "text-white" : "text-zinc-300")}>
           {node.name}
         </span>
 
         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity pr-1">
-          <button 
+          <button
             onClick={handleDelete}
             className="p-1 hover:bg-white/10 rounded text-text-dim hover:text-red-400 transition-colors"
           >
@@ -123,21 +109,19 @@ export default function Explorer() {
   return (
     <div className="flex flex-col h-full bg-bg-panel/30">
       <div className="flex items-center justify-between px-4 py-2 border-b border-white/5 bg-white/2">
-        <span className="text-[10px] font-bold text-text-dim uppercase tracking-widest">
-          Espace de travail
-        </span>
+        <span className="text-[10px] font-bold text-text-dim uppercase tracking-widest">Workspace</span>
         <div className="flex items-center gap-1">
-          <button 
+          <button
             onClick={() => refreshFileTree()}
             className="p-1 hover:bg-white/5 rounded text-text-dim hover:text-white transition-colors"
-            title="Rafraîchir"
+            title="Refresh"
           >
             <RotateCw size={12} />
           </button>
-          <button 
+          <button
             onClick={() => setIsCreatingFile(true)}
-            className="p-1 hover:bg-white/5 rounded text-text-dim hover:text-white transition-colors" 
-            title="Nouveau fichier"
+            className="p-1 hover:bg-white/5 rounded text-text-dim hover:text-white transition-colors"
+            title="New file"
           >
             <FilePlus size={13} />
           </button>
@@ -147,21 +131,21 @@ export default function Explorer() {
       <div className="flex-1 overflow-y-auto py-2">
         {isCreatingFile && (
           <div className="px-4 py-2 bg-brand/5 border-l-2 border-brand mb-2 mx-2 rounded-r">
-             <form onSubmit={handleCreateFile} className="flex flex-col gap-2">
-                <input
-                  type="text"
-                  value={newFileName}
-                  onChange={(e) => setNewFileName(e.target.value)}
-                  placeholder="nom-fichier.ts"
-                  className="bg-[#0A0A0B] border border-brand/50 rounded p-1 text-[12px] text-white outline-none"
-                  autoFocus
-                  onBlur={() => !newFileName && setIsCreatingFile(false)}
-                />
-                <div className="flex gap-2 justify-end">
-                  <button type="button" onClick={() => setIsCreatingFile(false)} className="text-[10px] text-text-dim hover:text-white">Annuler</button>
-                  <button type="submit" className="text-[10px] text-brand font-bold uppercase tracking-wider">Créer</button>
-                </div>
-             </form>
+            <form onSubmit={handleCreateFile} className="flex flex-col gap-2">
+              <input
+                type="text"
+                value={newFileName}
+                onChange={(e) => setNewFileName(e.target.value)}
+                placeholder="filename.ts"
+                className="bg-[#0A0A0B] border border-brand/50 rounded p-1 text-[12px] text-white outline-none"
+                autoFocus
+                onBlur={() => !newFileName && setIsCreatingFile(false)}
+              />
+              <div className="flex gap-2 justify-end">
+                <button type="button" onClick={() => setIsCreatingFile(false)} className="text-[10px] text-text-dim hover:text-white">Cancel</button>
+                <button type="submit" className="text-[10px] text-brand font-bold uppercase tracking-wider">Create</button>
+              </div>
+            </form>
           </div>
         )}
 
@@ -171,12 +155,9 @@ export default function Explorer() {
             <div className="animate-pulse w-3/4 h-4 bg-white/5 rounded mx-auto" />
           </div>
         ) : (
-          fileTree.map((node) => (
-            <TreeItem key={node.path} node={node} level={0} />
-          ))
+          fileTree.map((node) => <TreeItem key={node.path} node={node} level={0} />)
         )}
       </div>
     </div>
   );
 }
-

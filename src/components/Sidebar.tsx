@@ -1,33 +1,37 @@
-import { 
-  Files, 
-  Search, 
-  MessageSquare, 
-  GitBranch, 
-  Settings, 
-  History, 
-  Box,
-  User
+import {
+  Files,
+  Search,
+  MessageSquare,
+  GitBranch,
+  Settings,
+  History,
+  Code2,
+  User,
 } from "lucide-react";
-import { useIDEStore, SidebarTab } from "../store/useIDEStore.ts";
-import { cn } from "../lib/utils.ts";
+import { useIDEStore, SidebarTab } from "../store/useIDEStore";
+import { cn } from "../lib/utils";
 
 export default function Sidebar() {
-  const { activeSidebarTab, setActiveSidebarTab } = useIDEStore();
+  const { activeSidebarTab, setActiveSidebarTab, setCurrentPage } = useIDEStore();
 
   const items: { id: SidebarTab; icon: any; label: string }[] = [
-    { id: "explorer", icon: Files, label: "Explorateur" },
-    { id: "search", icon: Search, label: "Recherche" },
-    { id: "ai", icon: MessageSquare, label: "Agent IA" },
-    { id: "git", icon: GitBranch, label: "Gestion du code" },
-    { id: "history", icon: History, label: "Historique" },
+    { id: "explorer", icon: Files, label: "Explorer" },
+    { id: "search", icon: Search, label: "Search" },
+    { id: "ai", icon: MessageSquare, label: "AI Agent" },
+    { id: "git", icon: GitBranch, label: "Source Control" },
+    { id: "history", icon: History, label: "History" },
   ];
 
   return (
     <div className="w-[60px] h-full flex flex-col items-center py-4 bg-bg-sub border-r border-white/5 z-50">
       <div className="mb-8">
-        <div className="w-8 h-8 rounded-lg bg-brand flex items-center justify-center shadow-lg shadow-brand/20">
-          <Box size={20} className="text-white" strokeWidth={2.5} />
-        </div>
+        <button
+          onClick={() => setCurrentPage("dashboard")}
+          className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand to-indigo-600 flex items-center justify-center shadow-lg shadow-brand/20 hover:shadow-brand/40 transition-shadow"
+          title="Back to Dashboard"
+        >
+          <Code2 size={18} className="text-white" strokeWidth={2.5} />
+        </button>
       </div>
 
       <div className="flex-1 flex flex-col gap-4">
@@ -37,8 +41,8 @@ export default function Sidebar() {
             onClick={() => setActiveSidebarTab(item.id)}
             className={cn(
               "p-3 rounded-xl transition-all duration-200 group relative",
-              activeSidebarTab === item.id 
-                ? "bg-white/5 text-white" 
+              activeSidebarTab === item.id
+                ? "bg-white/5 text-white"
                 : "text-text-dim hover:text-white hover:bg-white/5"
             )}
             title={item.label}
@@ -52,7 +56,7 @@ export default function Sidebar() {
       </div>
 
       <div className="flex flex-col gap-4 mt-auto">
-        <button 
+        <button
           onClick={() => setActiveSidebarTab("settings")}
           className={cn(
             "p-3 rounded-xl transition-all duration-200 text-text-dim hover:text-white hover:bg-white/5",

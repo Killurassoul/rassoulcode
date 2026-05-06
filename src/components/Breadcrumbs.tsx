@@ -1,6 +1,6 @@
 import { ChevronRight, FileCode, Folder, Loader2, Save, Cloud } from "lucide-react";
-import { useIDEStore } from "../store/useIDEStore.ts";
-import { cn } from "../lib/utils.ts";
+import { useIDEStore } from "../store/useIDEStore";
+import { cn } from "../lib/utils";
 
 export default function Breadcrumbs() {
   const { activeFile, fileSaveStatus } = useIDEStore();
@@ -8,19 +8,13 @@ export default function Breadcrumbs() {
   if (!activeFile) return null;
 
   const status = fileSaveStatus[activeFile] || "saved";
-
   const parts = activeFile.split("/");
 
   return (
     <div className="flex items-center gap-1.5 px-4 py-1.5 bg-bg-panel/30 border-b border-border text-[10px] font-medium text-text-dim select-none overflow-x-auto no-scrollbar">
-      <div className="flex items-center gap-1 hover:text-white cursor-pointer transition-colors">
-        <Folder size={10} className="text-zinc-500" />
-        <span>lib</span>
-      </div>
-      
       {parts.map((part, i) => (
         <div key={i} className="flex items-center gap-1.5">
-          <ChevronRight size={10} className="opacity-30" />
+          {i > 0 && <ChevronRight size={10} className="opacity-30" />}
           <div className="flex items-center gap-1 hover:text-white cursor-pointer transition-colors last:text-brand last:font-bold">
             {i === parts.length - 1 ? (
               <FileCode size={10} className="text-brand" />
@@ -31,11 +25,11 @@ export default function Breadcrumbs() {
           </div>
         </div>
       ))}
-      
+
       <div className="ml-auto flex items-center gap-4">
         <div className={cn(
           "flex items-center gap-1.5 transition-all duration-300",
-          status === "unsaved" ? "text-amber-500 opacity-100" : 
+          status === "unsaved" ? "text-amber-500 opacity-100" :
           status === "saving" ? "text-brand opacity-100" :
           "text-emerald-500 opacity-40"
         )}>
@@ -47,15 +41,10 @@ export default function Breadcrumbs() {
             <Cloud size={10} />
           )}
           <span className="uppercase tracking-tighter text-[9px] font-bold">
-            {status === "unsaved" ? "Modifications non enregistrées" : 
-             status === "saving" ? "Enregistrement..." : 
-             "Modifications enregistrées"}
+            {status === "unsaved" ? "Unsaved changes" :
+             status === "saving" ? "Saving..." :
+             "Saved"}
           </span>
-        </div>
-
-        <div className="flex items-center gap-2 opacity-30">
-          <div className="w-1 h-1 rounded-full bg-emerald-500" />
-          <span>Lecture seule désactivée</span>
         </div>
       </div>
     </div>
