@@ -60,8 +60,10 @@ export default function Terminal() {
       
       try {
         const core = (term as any)._core;
-        // Strict check for internal renderer state before calling fit()
-        if (core?._renderService?.dimensions?.actualCellWidth > 0 && core?._renderService?.dimensions?.actualCellHeight > 0) {
+        // Ensure the internal renderer has actually measured cell dimensions
+        // In Xterm 5+, accessing fit() before dimensions are measured causes a TypeError
+        const dims = core?._renderService?.dimensions;
+        if (dims && (dims.actualCellWidth > 0 || dims.device?.cell?.width > 0)) {
           fitAddon.fit();
         }
       } catch (e) {
@@ -122,11 +124,16 @@ export default function Terminal() {
       
       // Avoid fitting if hidden or not visible (offsetParent is null when display: none)
       if (!terminalRef.current.offsetParent) return;
+      
+      // Ensure container has actual physical size to avoid division by zero in addon
+      if (terminalRef.current.clientWidth === 0 || terminalRef.current.clientHeight === 0) return;
 
       try {
         const core = (term as any)._core;
-        // Ensure the internal render service and dimensions are fully initialized
-        if (core?._renderService?.dimensions?.actualCellWidth > 0 && core?._renderService?.dimensions?.actualCellHeight > 0) {
+        // Verify the renderer has actually measured at least one cell
+        // This is the most reliable way to know fit() won't throw
+        const dims = core?._renderService?.dimensions;
+        if (dims && (dims.actualCellWidth > 0 || dims.device?.cell?.width > 0)) {
           fitAddon.fit();
         }
       } catch (e) {
