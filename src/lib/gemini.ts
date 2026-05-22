@@ -1,9 +1,21 @@
 import { GoogleGenAI } from "@google/genai";
+import { useIDEStore } from "../store/useIDEStore.ts";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+const getAI = () => {
+  const { apiKey } = useIDEStore.getState();
+  
+  if (!apiKey) {
+    throw new Error("Aucune clé API configurée. Veuillez configurer votre clé dans les paramètres.");
+  }
+  
+  return new GoogleGenAI({ apiKey });
+};
 
 export async function askAI(prompt: string, context: string = "") {
-  const modelName = "gemini-3.1-pro-preview"; // Optimized for coding
+  const { aiModel } = useIDEStore.getState();
+  const ai = getAI();
+  
+  const modelName = aiModel || "gemini-3.1-pro-preview";
   
   const systemInstruction = `
     You are CodeForge AI, an expert autonomous software engineer.
@@ -38,7 +50,7 @@ export async function askAI(prompt: string, context: string = "") {
       contents: prompt,
       config: {
         systemInstruction,
-        temperature: 0.1, // Even lower for absolute precision
+        temperature: 0.1,
         responseMimeType: "text/plain" 
       }
     });
@@ -51,7 +63,6 @@ export async function askAI(prompt: string, context: string = "") {
   } catch (error: any) {
     console.error("Gemini AI error:", error);
     
-    // Better error propagation
     let errorCode = "UNKNOWN_ERROR";
     let errorMessage = error.message || "An unexpected error occurred.";
     
@@ -59,13 +70,14 @@ export async function askAI(prompt: string, context: string = "") {
     if (errorMessage.includes("quota") || errorMessage.includes("429")) errorCode = "QUOTA_EXCEEDED";
     if (errorMessage.includes("network") || errorMessage.includes("fetch")) errorCode = "NETWORK_ERROR";
     if (errorMessage.includes("safety") || errorMessage.includes("blocked")) errorCode = "SAFETY_BLOCK";
+    if (errorMessage.includes("Aucune clé")) errorCode = "NO_API_KEY";
 
     throw { code: errorCode, message: errorMessage, originalError: error };
   }
 }
 
 export async function getAutocomplete(prefix: string, suffix: string, filename: string, projectContext: string = "") {
-  const modelName = "gemini-1.5-flash"; // Fast and capable for autocomplete
+  const ai = getAI();
   
   const prompt = `
     You are an AI code completion engine.
@@ -89,11 +101,11 @@ export async function getAutocomplete(prefix: string, suffix: string, filename: 
 
   try {
     const response = await ai.models.generateContent({
-      model: modelName,
+      model: "gemini-1.5-flash",
       contents: prompt,
       config: {
-        temperature: 0.0, // Absolute determinism
-        maxOutputTokens: 128, // Keep it short and fast
+        temperature: 0.0,
+        maxOutputTokens: 128,
       }
     });
 
