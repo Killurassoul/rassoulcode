@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { GoogleGenAI } from "@google/genai";
+import { detectAPIKey } from "../lib/apiDetector.ts";
 
 export interface FileNode {
   name: string;
@@ -63,7 +64,11 @@ interface IDEState {
   terminalCommands: string[];
   broadcastTerminalCommand: (command: string) => void;
 
-  // Settings
+  // Settings - API Configuration
+  apiKey: string;
+  setApiKey: (key: string) => Promise<void>;
+  apiKeyStatus: "unconfigured" | "validating" | "valid" | "invalid";
+  setApiKeyStatus: (status: "unconfigured" | "validating" | "valid" | "invalid") => void;
   aiProvider: string;
   setAiProvider: (provider: string) => void;
   aiModel: string;
@@ -210,10 +215,62 @@ export const useIDEStore = create<IDEState>((set, get) => ({
     terminalCommands: [...get().terminalCommands, command] 
   }),
 
-  aiProvider: "gemini",
+  // API Configuration
+  apiKey: "",
+  setApiKey: async (key) => {
+    set({ apiKeyStatus: "validating" });
+    try {
+      const detected = detectAPIKey(key);
+      if (!detected.isValid) {
+        throw new Error("Format de clé API non reconnu");
+      }
+
+      // Essayer une validation basique avec Gemini (fallback par défaut)
+      try {
+        const ai = new GoogleGenAI({ apiKey: key });
+        await ai.models.generateContent({
+          model: "gemini-pro",
+          contents: "test",
+        });
+      } catch (e: any) {
+        if (!e.message.includes("blocked") && !e.message.includes("safety")) {
+          console.warn("API test failed, but accepting key anyway", e);
+        }
+      }
+
+      set({
+        apiKey: key,
+        apiProvider: detected.provider,
+        aiModel: detected.model,
+        apiKeyStatus: "valid"
+      });
+
+      // Sauvegarder dans localStorage
+      localStorage.setItem("gemini_api_key", key);
+      localStorage.setItem("gemini_provider", detected.provider);
+      localStorage.setItem("gemini_model", detected.model);
+    } catch (error: any) {
+      set({ apiKeyStatus: "invalid" });
+      throw error;
+    }
+  },
+
+  apiKeyStatus: (() => {
+    const saved = typeof window !== "undefined" ? localStorage.getItem("gemini_api_key") : null;
+    return saved ? "valid" : "unconfigured";
+  })(),
+  setApiKeyStatus: (status) => set({ apiKeyStatus: status }),
+
+  aiProvider: (() => {
+    return typeof window !== "undefined" ? (localStorage.getItem("gemini_provider") || "gemini") : "gemini";
+  })(),
   setAiProvider: (aiProvider) => set({ aiProvider }),
-  aiModel: "gemini-3.1-pro-preview",
+
+  aiModel: (() => {
+    return typeof window !== "undefined" ? (localStorage.getItem("gemini_model") || "gemini-3.1-pro-preview") : "gemini-3.1-pro-preview";
+  })(),
   setAiModel: (aiModel) => set({ aiModel }),
+
   executionMode: "safe",
   setExecutionMode: (executionMode) => set({ executionMode }),
 
@@ -238,7 +295,7 @@ export const useIDEStore = create<IDEState>((set, get) => ({
     });
   },
   commitChanges: async (message) => {
-    const { stagedChanges, gitCommits } = get();
+    const { stagedChanges, gitCommits, apiKey } = get();
     if (stagedChanges.length === 0) return;
     const newCommit = {
       message,
@@ -261,11 +318,13 @@ export const useIDEStore = create<IDEState>((set, get) => ({
     console.log("Pulled from main");
   },
   generateCommitMessage: async () => {
-    const { stagedChanges, fileContents } = get();
+    const { stagedChanges, fileContents, apiKey } = get();
     if (stagedChanges.length === 0) return "No changes to commit";
     
+    if (!apiKey) return `Update ${stagedChanges.length} files`;
+
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const ai = new GoogleGenAI({ apiKey });
       
       // Collect content of staged files for context
       let context = "Suggest a concise and professional Git commit message based on the following changes:\n\n";
@@ -285,7 +344,7 @@ export const useIDEStore = create<IDEState>((set, get) => ({
       }
 
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-1.5-flash",
         contents: context,
         config: {
           systemInstruction: "You are a senior software engineer. Output ONLY the commit message string, nothing else. Keep it under 72 characters.",
@@ -301,16 +360,16 @@ export const useIDEStore = create<IDEState>((set, get) => ({
   },
 
   refactorCode: async () => {
-    const { activeFile, fileContents, setFileContent } = get();
-    if (!activeFile) return;
+    const { activeFile, fileContents, setFileContent, apiKey } = get();
+    if (!activeFile || !apiKey) return;
 
     try {
       set({ isAgentThinking: true });
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const ai = new GoogleGenAI({ apiKey });
       const content = fileContents[activeFile];
 
       const response = await ai.models.generateContent({
-        model: "gemini-3.1-pro-preview",
+        model: "gemini-1.5-flash",
         contents: `Refactor and improve the following code. Keep it clean, efficient and follow best practices. 
         Output ONLY the improved code, no explanations or markdown blocks.
         
